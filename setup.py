@@ -35,7 +35,7 @@ class CMakeBuild(build_ext):
         os.makedirs(build_dir, exist_ok=True)
 
         # Get submodule path
-        llama_cpp_dir = os.path.abspath("llama.cpp")
+        llama_cpp_dir = os.path.abspath(os.environ.get("LLAMA_CPP_DIR", "llama.cpp"))
 
         # Add RPATH settings based on the platform
         system = platform.system()

@@ -1,0 +1,234 @@
+name: Build CUDA Wheels (ik_llama.cpp)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag of llama-cpp-binaries to build: v0.1.0'
+        default: 'v0.1.0'
+        required: true
+        type: string
+      config:
+        description: 'Override configurations to build: key1:item1-1,item1-2;key2:item2-1,item2-2'
+        default: 'Default'
+        required: false
+        type: string
+      exclude:
+        description: 'Exclude build configurations: key1-1:item1-1,key1-2:item1-2;key2-1:item2-1,key2-2:item2-2'
+        default: 'None'
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version tag of llama-cpp-binaries to build: v0.1.0'
+        default: 'v0.1.0'
+        required: true
+        type: string
+      config:
+        description: 'Configurations to build: key1:item1-1,item1-2;key2:item2-1,item2-2'
+        default: 'Default'
+        required: false
+        type: string
+      exclude:
+        description: 'Exclude build configurations: key1-1:item1-1,key1-2:item1-2;key2-1:item2-1,key2-2:item2-2'
+        default: 'None'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  define_matrix:
+    name: Define Build Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CONFIGIN: ${{ inputs.config }}
+      EXCLUDEIN: ${{ inputs.exclude }}
+
+    steps:
+      - name: Define Job Output
+        id: set-matrix
+        run: |
+          $matrix = @{
+              'os' = @('ubuntu-22.04', 'windows-2022')
+              'pyver' = @("3.11")
+              'cuda' = @("12.4.1", "13.1.0")
+          }
+
+          if ($env:CONFIGIN -ne 'Default') {$env:CONFIGIN.split(';').foreach({$matrix[$_.split(':')[0]] = $_.split(':')[1].split(',')})}
+
+          if ($env:EXCLUDEIN -ne 'None') {
+              $exclusions = @()
+              $exclusions += $env:EXCLUDEIN.split(';').replace(':','=').replace(',',"`n") | ConvertFrom-StringData
+              $matrix['exclude'] = $exclusions
+          }
+
+          $matrixOut = ConvertTo-Json $matrix -Compress
+          Write-Output ('matrix=' + $matrixOut) >> $env:GITHUB_OUTPUT
+
+  build_wheels:
+    name: ${{ matrix.os }} CUDA ${{ matrix.cuda }} (ik)
+    needs: define_matrix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix: ${{ fromJSON(needs.define_matrix.outputs.matrix) }}
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CUDAVER: ${{ matrix.cuda }}
+
+    steps:
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        if: runner.os == 'Linux'
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          swap-storage: true
+
+      - uses: actions/checkout@v6
+        with:
+          repository: 'oobabooga/llama-cpp-binaries'
+          ref: ${{ inputs.version }}
+          submodules: 'recursive'
+
+      - name: Setup ik_llama.cpp
+        run: |
+          Rename-Item llama_cpp_binaries ik_llama_cpp_binaries
+          @('pyproject.toml', 'setup.py') | ForEach-Object {
+            (Get-Content $_) -replace 'llama_cpp_binaries','ik_llama_cpp_binaries' | Set-Content $_
+          }
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2.20
+        with:
+          key: cuda-ik-${{ matrix.cuda }}-${{ matrix.os }}
+          variant: ccache
+          evict-old-files: 14d
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.pyver }}
+
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.30
+        id: cuda-toolkit
+        with:
+          cuda: ${{ matrix.cuda }}
+          method: 'network'
+
+      - name: Setup CUDA Environment
+        run: |
+          echo "CUDA_PATH=$env:CUDA_PATH" >> $env:GITHUB_ENV
+          echo "CUDA_HOME=$env:CUDA_PATH" >> $env:GITHUB_ENV
+          if ($IsLinux) {
+            echo "LD_LIBRARY_PATH=$env:CUDA_PATH/lib64:$env:LD_LIBRARY_PATH" >> $env:GITHUB_ENV
+          }
+
+      - name: Verify CUDA
+        run: nvcc --version
+
+      - name: Install Ninja
+        if: runner.os == 'Windows'
+        run: choco install ninja
+
+      - name: Setup MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Dependencies
+        run: |
+          if ($IsLinux) {
+            sudo apt-get update
+            sudo apt-get install -y build-essential libssl-dev
+          }
+          python -m pip install build
+
+      - name: Build Wheel
+        env:
+          LLAMA_CPP_DIR: ik_llama.cpp
+        run: |
+          $cudaVersion = $env:CUDAVER.Remove($env:CUDAVER.LastIndexOf('.')).Replace('.','')
+
+          $env:VERBOSE = '1'
+          # ik_llama.cpp defaults to older CUDA architectures, so we set them explicitly to match upstream llama.cpp
+          $cudaMajorMinor = $env:CUDAVER.Remove($env:CUDAVER.LastIndexOf('.'))
+          $archs = "75-virtual;80-virtual;86-real;89-real"
+          if ([version]$cudaMajorMinor -lt [version]"13.0") {
+            $archs = "50-virtual;61-virtual;70-virtual;$archs"
+          }
+          if ([version]$cudaMajorMinor -ge [version]"12.8") { $archs += ";120a-real" }
+          if ([version]$cudaMajorMinor -ge [version]"12.9") { $archs += ";121a-real" }
+
+          $env:CMAKE_ARGS = "-DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=off -DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES='$archs' -DGGML_RPC=on -DLLAMA_BUILD_TESTS=off -DLLAMA_BUILD_EXAMPLES=on -DLLAMA_BUILD_SERVER=on"
+
+          if ($IsWindows) {
+            $env:CMAKE_ARGS += " -G 'Ninja'"
+          }
+
+          $env:LLAMA_CPP_BUILD_JOBS = "2"
+
+          # Copy CUDA libraries
+          $binDir = "ik_llama_cpp_binaries/bin"
+          New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+
+          $cudaMajor = $env:CUDAVER.Split('.')[0]
+
+          if ($IsLinux) {
+              $libsToFind = @("libcudart.so.$cudaMajor", "libcublas.so.$cudaMajor", "libcublasLt.so.$cudaMajor")
+
+              foreach ($lib in $libsToFind) {
+                  $foundFiles = Get-ChildItem -Path "$env:CUDA_PATH/lib64" -Filter "$lib*" -File | Select-Object -First 1
+                  if ($foundFiles) {
+                      bash -c "cp -L '$($foundFiles.FullName)' '$binDir/$lib'"
+                      Write-Host "Copied $($foundFiles.FullName) to $binDir/$lib"
+                  } else {
+                      Write-Warning "Could not find $lib"
+                  }
+              }
+          } else {
+              $libsToFind = @("cublas64_$cudaMajor.dll", "cudart64_$cudaMajor.dll", "cublasLt64_$cudaMajor.dll")
+
+              foreach ($lib in $libsToFind) {
+                  $foundFiles = Get-ChildItem -Path "$env:CUDA_PATH" -Filter $lib -Recurse -File | Select-Object -First 1
+                  if ($foundFiles) {
+                      Copy-Item -Path $foundFiles.FullName -Destination "$binDir/$lib"
+                      Write-Host "Copied $($foundFiles.FullName) to $binDir/$lib"
+                  } else {
+                      Write-Warning "Could not find $lib"
+                  }
+              }
+          }
+
+          $buildtag = "+cu$cudaVersion"
+          python -m build --wheel -C--build-option=egg_info "-C--build-option=--tag-build=$buildtag"
+
+      - name: Upload files to a GitHub release
+        id: upload-release
+        uses: svenstaro/upload-release-action@2.7.0
+        continue-on-error: true
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ./dist/*.whl
+          tag: ${{ inputs.version }}
+          release_name: ${{ inputs.version }}
+          file_glob: true
+          make_latest: false
+          overwrite: true
+
+      - uses: actions/upload-artifact@v6
+        if: steps.upload-release.outcome == 'failure'
+        with:
+          name: cuda-ik-${{ matrix.cuda }}-${{ runner.os }}
+          path: ./dist/*.whl

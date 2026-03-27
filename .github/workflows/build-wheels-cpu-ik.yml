@@ -1,0 +1,158 @@
+name: Build CPU Wheels (ik_llama.cpp)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag of llama-cpp-binaries to build: v0.1.0'
+        default: 'v0.1.0'
+        required: true
+        type: string
+      config:
+        description: 'Override configurations to build: key1:item1-1,item1-2;key2:item2-1,item2-2'
+        default: 'Default'
+        required: false
+        type: string
+      exclude:
+        description: 'Exclude build configurations: key1-1:item1-1,key1-2:item1-2;key2-1:item2-1,key2-2:item2-2'
+        default: 'None'
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version tag of llama-cpp-binaries to build: v0.1.0'
+        default: 'v0.1.0'
+        required: true
+        type: string
+      config:
+        description: 'Configurations to build: key1:item1-1,item1-2;key2:item2-1,item2-2'
+        default: 'Default'
+        required: false
+        type: string
+      exclude:
+        description: 'Exclude build configurations: key1-1:item1-1,key1-2:item1-2;key2-1:item2-1,key2-2:item2-2'
+        default: 'None'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  define_matrix:
+    name: Define Build Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CONFIGIN: ${{ inputs.config }}
+      EXCLUDEIN: ${{ inputs.exclude }}
+
+    steps:
+      - name: Define Job Output
+        id: set-matrix
+        run: |
+          $matrix = @{
+              'os' = @('ubuntu-22.04', 'windows-2022')
+              'pyver' = @("3.11")
+          }
+
+          if ($env:CONFIGIN -ne 'Default') {$env:CONFIGIN.split(';').foreach({$matrix[$_.split(':')[0]] = $_.split(':')[1].split(',')})}
+
+          if ($env:EXCLUDEIN -ne 'None') {
+              $exclusions = @()
+              $exclusions += $env:EXCLUDEIN.split(';').replace(':','=').replace(',',"`n") | ConvertFrom-StringData
+              $matrix['exclude'] = $exclusions
+          }
+
+          $matrixOut = ConvertTo-Json $matrix -Compress
+          Write-Output ('matrix=' + $matrixOut) >> $env:GITHUB_OUTPUT
+
+  build_wheels:
+    name: ${{ matrix.os }} CPU (ik)
+    needs: define_matrix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix: ${{ fromJSON(needs.define_matrix.outputs.matrix) }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: 'oobabooga/llama-cpp-binaries'
+          ref: ${{ inputs.version }}
+          submodules: 'recursive'
+
+      - name: Setup ik_llama.cpp
+        run: |
+          Rename-Item llama_cpp_binaries ik_llama_cpp_binaries
+          @('pyproject.toml', 'setup.py') | ForEach-Object {
+            (Get-Content $_) -replace 'llama_cpp_binaries','ik_llama_cpp_binaries' | Set-Content $_
+          }
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2.20
+        with:
+          key: cpu-ik-${{ matrix.os }}
+          variant: ccache
+          evict-old-files: 14d
+
+      - name: Install Ninja
+        if: runner.os == 'Windows'
+        run: choco install ninja
+
+      - name: Setup MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.pyver }}
+
+      - name: Install Dependencies
+        run: |
+          if ($IsLinux) {
+            sudo apt-get update
+            sudo apt-get install -y build-essential libssl-dev
+          }
+          python -m pip install build
+
+      - name: Build Wheel
+        env:
+          LLAMA_CPP_DIR: ik_llama.cpp
+        run: |
+          $env:VERBOSE = '1'
+          $env:CMAKE_ARGS = "-DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=off -DGGML_RPC=on -DLLAMA_BUILD_TESTS=off -DLLAMA_BUILD_EXAMPLES=on -DLLAMA_BUILD_SERVER=on"
+
+          if ($IsWindows) {
+            $env:CMAKE_ARGS += " -G 'Ninja'"
+          }
+
+          $env:LLAMA_CPP_BUILD_JOBS = "2"
+
+          $buildtag = "+cpu"
+          python -m build --wheel -C--build-option=egg_info "-C--build-option=--tag-build=$buildtag"
+
+      - name: Upload files to a GitHub release
+        id: upload-release
+        uses: svenstaro/upload-release-action@2.7.0
+        continue-on-error: true
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ./dist/*.whl
+          tag: ${{ inputs.version }}
+          release_name: ${{ inputs.version }}
+          file_glob: true
+          make_latest: false
+          overwrite: true
+
+      - uses: actions/upload-artifact@v6
+        if: steps.upload-release.outcome == 'failure'
+        with:
+          name: cpu-ik-${{ runner.os }}
+          path: ./dist/*.whl
