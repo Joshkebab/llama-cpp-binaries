@@ -162,20 +162,14 @@ jobs:
           $cudaVersion = $env:CUDAVER.Remove($env:CUDAVER.LastIndexOf('.')).Replace('.','')
 
           $env:VERBOSE = '1'
-          # ik_llama.cpp defaults to older CUDA architectures, so we set them explicitly to match upstream llama.cpp
+          # ik_llama.cpp links everything into one library (no GGML_BACKEND_DL), so we use
+          # virtual archs to keep binary size under the 2GB limit, with real for common GPUs
           $cudaMajorMinor = $env:CUDAVER.Remove($env:CUDAVER.LastIndexOf('.'))
-          $archs = "75-virtual;80-virtual;86-real;89-real"
-          if ([version]$cudaMajorMinor -lt [version]"13.0") {
-            $archs = "50-virtual;61-virtual;70-virtual;$archs"
-          }
+          $archs = "61-virtual;75-virtual;86-real;89-real"
           if ([version]$cudaMajorMinor -ge [version]"12.8") { $archs += ";120a-real" }
           if ([version]$cudaMajorMinor -ge [version]"12.9") { $archs += ";121a-real" }
 
           $env:CMAKE_ARGS = "-DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=off -DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES='$archs' -DGGML_RPC=on -DLLAMA_BUILD_TESTS=off -DLLAMA_BUILD_EXAMPLES=on -DLLAMA_BUILD_SERVER=on"
-
-          if ($IsLinux) {
-            $env:CMAKE_ARGS += " -DCMAKE_C_FLAGS='-mcmodel=medium' -DCMAKE_CXX_FLAGS='-mcmodel=medium'"
-          }
 
           if ($IsWindows) {
             $env:CMAKE_ARGS += " -G 'Ninja'"
