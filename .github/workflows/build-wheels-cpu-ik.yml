@@ -127,7 +127,7 @@ jobs:
           LLAMA_CPP_DIR: ik_llama.cpp
         run: |
           $env:VERBOSE = '1'
-          $env:CMAKE_ARGS = "-DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=off -DGGML_RPC=on -DLLAMA_BUILD_TESTS=off -DLLAMA_BUILD_EXAMPLES=on -DLLAMA_BUILD_SERVER=on"
+          $env:CMAKE_ARGS = "-DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=off -DGGML_MAX_CONTEXTS=2048 -DGGML_RPC=on -DLLAMA_BUILD_TESTS=off -DLLAMA_BUILD_EXAMPLES=on -DLLAMA_BUILD_SERVER=on"
 
           if ($IsWindows) {
             $env:CMAKE_ARGS += " -G 'Ninja'"
