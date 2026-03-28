@@ -95,13 +95,6 @@ jobs:
             (Get-Content $_) -replace 'llama_cpp_binaries','ik_llama_cpp_binaries' | Set-Content $_
           }
 
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.20
-        with:
-          key: cpu-ik-${{ matrix.os }}
-          variant: ccache
-          evict-old-files: 14d
-
       - name: Install Ninja
         if: runner.os == 'Windows'
         run: choco install ninja

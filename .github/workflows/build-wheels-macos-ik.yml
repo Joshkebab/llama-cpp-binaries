@@ -36,12 +36,6 @@ jobs:
           mv llama_cpp_binaries ik_llama_cpp_binaries
           sed -i '' 's/llama_cpp_binaries/ik_llama_cpp_binaries/g' pyproject.toml setup.py
 
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.20
-        with:
-          key: macos-arm64-ik
-          evict-old-files: 14d
-
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
@@ -100,12 +94,6 @@ jobs:
         run: |
           mv llama_cpp_binaries ik_llama_cpp_binaries
           sed -i '' 's/llama_cpp_binaries/ik_llama_cpp_binaries/g' pyproject.toml setup.py
-
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.20
-        with:
-          key: macos-x64-ik
-          evict-old-files: 14d
 
       - uses: actions/setup-python@v6
         with:
