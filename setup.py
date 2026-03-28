@@ -80,6 +80,18 @@ class CMakeBuild(build_ext):
             else:
                 shutil.copy(file, target_dir, follow_symlinks=True)
 
+        # Copy shared libraries that CMake places outside bin/
+        # (needed when building without GGML_BACKEND_DL, e.g. ik_llama.cpp)
+        for so_path in [
+            os.path.join(build_dir, "ggml", "src", "libggml.so"),
+            os.path.join(build_dir, "src", "libllama.so"),
+            os.path.join(build_dir, "examples", "mtmd", "libmtmd.so"),
+        ]:
+            if os.path.exists(so_path):
+                basename = os.path.basename(so_path)
+                if not os.path.exists(os.path.join(target_dir, basename)):
+                    shutil.copy(so_path, target_dir, follow_symlinks=True)
+
         if symlinks:
             with open(os.path.join(target_dir, "_symlinks.json"), "w") as f:
                 json.dump(symlinks, f)
