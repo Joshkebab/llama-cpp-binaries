@@ -79,9 +79,3 @@ jobs:
     uses: ./.github/workflows/build-wheels-cpu-ik.yml
     with:
       version: ${{ inputs.version }}
-
-  build_wheels_macos_ik:
-    name: IK MacOS Wheels
-    uses: ./.github/workflows/build-wheels-macos-ik.yml
-    with:
-      version: ${{ inputs.version }}
