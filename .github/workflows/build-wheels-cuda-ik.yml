@@ -166,9 +166,6 @@ jobs:
           # virtual archs to keep binary size under the 2GB limit, with real for common GPUs
           $cudaMajorMinor = $env:CUDAVER.Remove($env:CUDAVER.LastIndexOf('.'))
           $archs = "75-virtual;86-real;89-real"
-          if ([version]$cudaMajorMinor -lt [version]"13.0") {
-            $archs = "61-virtual;$archs"
-          }
           if ([version]$cudaMajorMinor -ge [version]"12.8") { $archs += ";120a-real" }
           if ([version]$cudaMajorMinor -ge [version]"12.9") { $archs += ";121a-real" }
 
