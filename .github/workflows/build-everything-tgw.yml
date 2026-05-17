@@ -27,6 +27,13 @@ jobs:
       version: ${{ inputs.version }}
       config: 'os:ubuntu-22.04'
 
+  build_cuda_wheels_linux_arm:
+    name: CUDA Wheels Linux ARM
+    uses: ./.github/workflows/build-wheels-cuda.yml
+    with:
+      version: ${{ inputs.version }}
+      config: 'os:ubuntu-24.04-arm;cuda:13.1.0'
+
   build_vulkan_wheels_windows:
     name: Vulkan Wheels Windows
     uses: ./.github/workflows/build-wheels-vulkan.yml
@@ -73,6 +80,13 @@ jobs:
     with:
       version: ${{ inputs.version }}
       config: 'os:ubuntu-22.04'
+
+  build_cuda_wheels_linux_arm_ik:
+    name: IK CUDA Wheels Linux ARM
+    uses: ./.github/workflows/build-wheels-cuda-ik.yml
+    with:
+      version: ${{ inputs.version }}
+      config: 'os:ubuntu-24.04-arm;cuda:13.1.0'
 
   build_wheels_cpu_ik:
     name: IK CPU-only Wheels
