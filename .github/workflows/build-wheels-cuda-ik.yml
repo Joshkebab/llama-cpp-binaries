@@ -57,18 +57,15 @@ jobs:
         id: set-matrix
         run: |
           $matrix = @{
-              'os' = @('ubuntu-22.04', 'ubuntu-24.04-arm', 'windows-2022')
+              'os' = @('ubuntu-22.04', 'windows-2022')
               'pyver' = @("3.11")
               'cuda' = @("12.4.1", "13.1.0")
-              'exclude' = @(
-                  @{ 'os' = 'ubuntu-24.04-arm'; 'cuda' = '12.4.1' }
-              )
           }
 
           if ($env:CONFIGIN -ne 'Default') {$env:CONFIGIN.split(';').foreach({$matrix[$_.split(':')[0]] = $_.split(':')[1].split(',')})}
 
           if ($env:EXCLUDEIN -ne 'None') {
-              $exclusions = @($matrix['exclude'])
+              $exclusions = @()
               $exclusions += $env:EXCLUDEIN.split(';').replace(':','=').replace(',',"`n") | ConvertFrom-StringData
               $matrix['exclude'] = $exclusions
           }
