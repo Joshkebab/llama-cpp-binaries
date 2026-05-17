@@ -148,6 +148,12 @@ jobs:
           if ($IsLinux) {
             sudo apt-get update
             sudo apt-get install -y build-essential libssl-dev
+            if ($env:RUNNER_ARCH -eq 'ARM64') {
+              sudo apt-get install -y gcc-14 g++-14
+              echo "CC=gcc-14" >> $env:GITHUB_ENV
+              echo "CXX=g++-14" >> $env:GITHUB_ENV
+              echo "CUDAHOSTCXX=g++-14" >> $env:GITHUB_ENV
+            }
           }
           python -m pip install build
 
