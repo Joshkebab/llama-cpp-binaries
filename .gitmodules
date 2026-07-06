@@ -1,6 +1,6 @@
 [submodule "llama.cpp"]
 	path = llama.cpp
-	url = git@github.com:ggml-org/llama.cpp.git
+	url = https://github.com/ggml-org/llama.cpp.git
 [submodule "ik_llama.cpp"]
 	path = ik_llama.cpp
-	url = git@github.com:ikawrakow/ik_llama.cpp.git
+	url = https://github.com/ikawrakow/ik_llama.cpp.git
