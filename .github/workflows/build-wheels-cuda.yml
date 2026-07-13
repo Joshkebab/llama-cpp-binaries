@@ -103,7 +103,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: 'Joshkebab/llama-cpp-binaries'
-          ref: ${{ inputs.version }}
           submodules: 'recursive'
 
       - name: ccache
