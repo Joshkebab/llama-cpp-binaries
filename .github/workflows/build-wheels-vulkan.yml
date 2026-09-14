@@ -96,7 +96,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: 'oobabooga/llama-cpp-binaries'
-          ref: ${{ inputs.version }}
           submodules: 'recursive'
 
       - uses: actions/setup-python@v6
