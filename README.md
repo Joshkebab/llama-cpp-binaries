@@ -4,7 +4,9 @@ llama.cpp server in a Python wheel.
 
 A fork to keep my own copy of oobabooga/textgen[https://github.com/oobabooga/textgen] llama.cpp loader updated.
 
-Only building the cuda libraries for now.
+Now building everything.
+
+Gonna be away for a bit, expect no updates for a couple weeks.
 
 ## Installation
 
