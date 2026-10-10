@@ -6,8 +6,6 @@ A fork to keep my own copy of oobabooga/textgen[https://github.com/oobabooga/tex
 
 Now building everything.
 
-Gonna be away for a bit, expect no updates for a couple weeks.
-
 ## Installation
 
 ```
