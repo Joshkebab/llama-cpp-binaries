@@ -4,6 +4,8 @@ llama.cpp server in a Python wheel.
 
 A fork to keep my own copy of oobabooga/textgen[https://github.com/oobabooga/textgen] llama.cpp loader updated.
 
+Some builds aren't working, I'll fix them when I have time.
+
 ## Installation
 
 ```
